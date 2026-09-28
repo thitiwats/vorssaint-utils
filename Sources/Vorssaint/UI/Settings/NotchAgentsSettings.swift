@@ -211,9 +211,11 @@ struct NotchAgentsSettingsControls: View {
     /// thread for the files, never on every draw.
     private func findClaudeApp() {
         claudeApp = NSWorkspace.shared.urlForApplication(withBundleIdentifier: AgentClaudeAppUsage.bundleIdentifier)
+        // The running service already knows; the profile can be large.
+        let readCode = usage.claudeCodeChecked == nil
         DispatchQueue.global(qos: .utility).async {
             let checked = AgentClaudeAppUsage.lastCheck()
-            let codeChecked = AgentClaudeCodeUsage.lastCheck()
+            let codeChecked = readCode ? AgentClaudeCodeUsage.lastCheck() : nil
             DispatchQueue.main.async {
                 claudeAppFileCheck = checked
                 claudeCodeFileCheck = codeChecked

@@ -2436,6 +2436,19 @@ enum NotchAgentTests {
                         && AgentClaudeCodeUsage.limits(undated, now: at("2026-09-28T19:00:00Z"))?.windows.map(\.kind) == [.weekly]
                         && AgentClaudeCodeUsage.limits(undated, now: at("2026-09-29T14:00:00Z")) == nil,
                      "without a renewal date a session holds for five hours and a week for a day")
+        let opus = AgentLimitWindow(id: "claude.so", kind: .weekly, minutes: 10_080, scope: "Opus",
+                                    usedPercent: 40, resetsAt: nil)
+        let week = AgentLimitWindow(id: "claude.sd", kind: .weekly, minutes: 10_080, scope: nil,
+                                    usedPercent: 50, resetsAt: nil)
+        let app = AgentLimits(provider: .claude, windows: [week, opus], observedAt: fetched.addingTimeInterval(-600),
+                              source: .claudeApp)
+        let merged = AgentClaudeCodeUsage.combined(app, reading)
+        suite.expect(merged?.source == .claudeCode && merged?.observedAt == fetched
+                        && merged?.windows.map(\.usedPercent) == [22, 12, 40]
+                        && AgentClaudeCodeUsage.combined(reading, app) == merged
+                        && AgentClaudeCodeUsage.combined(app, nil) == app
+                        && AgentClaudeCodeUsage.combined(nil, nil) == nil,
+                     "the newer reading leads and keeps a window only the older one knows")
         let home = FileManager.default.temporaryDirectory.appending(path: "vorss-claude-code-\(UUID().uuidString)")
         defer { try? FileManager.default.removeItem(at: home) }
         try? FileManager.default.createDirectory(at: home, withIntermediateDirectories: true)

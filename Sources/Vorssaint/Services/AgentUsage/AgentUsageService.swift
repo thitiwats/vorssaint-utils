@@ -83,6 +83,7 @@ final class AgentUsageService: ObservableObject {
     /// The organization Claude Code signs in to, when its profile says.
     private var claudeOrganization: String?
     private var claudeProfileModified: Date?
+    private var claudeProfileSize: Int?
     /// The limits Claude Code cached, as it saved them.
     private var claudeCodeReading: AgentLimits?
     private var claudeAppModified: Date?
@@ -184,6 +185,7 @@ final class AgentUsageService: ObservableObject {
             claudePlan = nil
             claudeOrganization = nil
             claudeProfileModified = nil
+            claudeProfileSize = nil
             claudeCodeReading = nil
             claudeAppModified = nil
             claudeAppSamples = []
@@ -606,12 +608,17 @@ final class AgentUsageService: ObservableObject {
     private func readClaudePlan() {
         guard enabled.contains(.claude) else { return }
         let url = AgentClaudeCodeUsage.profileURL(home: home)
-        let modified = (try? url.resourceValues(forKeys: [.contentModificationDateKey]))?.contentModificationDate
-        guard modified != claudeProfileModified else { return }
+        let values = try? url.resourceValues(forKeys: [.contentModificationDateKey, .fileSizeKey])
+        let modified = values?.contentModificationDate, size = values?.fileSize
+        guard modified != claudeProfileModified || size != claudeProfileSize else { return }
+        // Caught mid-write, the file is read again on the next tick with
+        // what it said before kept until then.
+        let json = modified == nil ? nil : (try? Data(contentsOf: url, options: .mappedIfSafe))
+            .flatMap { (try? JSONSerialization.jsonObject(with: $0)) as? [String: Any] }
+        if modified != nil, json == nil { return }
         claudeProfileModified = modified
-        guard let data = try? Data(contentsOf: url, options: .mappedIfSafe),
-              let json = (try? JSONSerialization.jsonObject(with: data)) as? [String: Any],
-              let account = json["oauthAccount"] as? [String: Any] else {
+        claudeProfileSize = size
+        guard let account = json?["oauthAccount"] as? [String: Any], let json else {
             claudePlan = nil
             claudeOrganization = nil
             claudeCodeReading = nil
@@ -626,7 +633,7 @@ final class AgentUsageService: ObservableObject {
 
     /// Reads the limits the Claude app saved when the file changes, and
     /// places them and Claude Code's at `now` on every call, since a session
-    /// ages out between saves. The newer of the two is shown. Runs on `queue`.
+    /// ages out between saves. The newer of the two leads. Runs on `queue`.
     private func readClaudeApp(now: Date) {
         guard enabled.contains(.claude) else {
             if store.limits[.claude] != nil { store.clearLimits(.claude) }
@@ -647,7 +654,7 @@ final class AgentUsageService: ObservableObject {
         let app = AgentClaudeAppUsage.limits(from: claudeAppSamples, now: now, sessionStart: start,
                                              organization: claudeOrganization)
         let code = AgentClaudeCodeUsage.limits(claudeCodeReading, now: now)
-        if let limits = [app, code].compactMap({ $0 }).max(by: { $0.observedAt < $1.observedAt }) {
+        if let limits = AgentClaudeCodeUsage.combined(app, code) {
             store.setLimits(limits)
         } else if store.limits[.claude] != nil {
             store.clearLimits(.claude)
