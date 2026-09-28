@@ -57,4 +57,17 @@ enum AgentClaudeCodeUsage {
         }
         return reading.windows.isEmpty ? nil : reading
     }
+
+    /// The newer of two readings, with any window only the older one knows,
+    /// such as a model's own week, kept from it.
+    static func combined(_ first: AgentLimits?, _ second: AgentLimits?) -> AgentLimits? {
+        guard let first, let second else { return first ?? second }
+        let firstIsNewer = first.observedAt >= second.observedAt
+        var newer = firstIsNewer ? first : second
+        let older = firstIsNewer ? second : first
+        let key = { (window: AgentLimitWindow) in "\(window.kind.rawValue):\(window.scope ?? "")" }
+        let known = Set(newer.windows.map(key))
+        newer.windows += older.windows.filter { !known.contains(key($0)) }
+        return newer
+    }
 }
