@@ -8,9 +8,11 @@ import Foundation
 /// app. The field is Claude Code's own and undocumented: anything this reader
 /// does not know is left out rather than guessed, and nothing is sent.
 enum AgentClaudeCodeUsage {
-    private static let windows: [(key: String, kind: AgentLimitWindow.Kind, minutes: Int, scope: String?)] = [
-        ("five_hour", .session, 300, nil), ("seven_day", .weekly, 10_080, nil),
-        ("seven_day_opus", .weekly, 10_080, "Opus"), ("seven_day_sonnet", .weekly, 10_080, "Sonnet")]
+    /// Each window keeps the id the Claude app reader gives it, so an alert
+    /// sees the same window when the newer reading switches source.
+    private static let windows: [(key: String, id: String, kind: AgentLimitWindow.Kind, minutes: Int, scope: String?)] = [
+        ("five_hour", "fh", .session, 300, nil), ("seven_day", "sd", .weekly, 10_080, nil),
+        ("seven_day_opus", "so", .weekly, 10_080, "Opus"), ("seven_day_sonnet", "sn", .weekly, 10_080, "Sonnet")]
 
     static func profileURL(home: URL) -> URL {
         home.appending(path: ".claude.json", directoryHint: .notDirectory)
@@ -36,7 +38,7 @@ enum AgentClaudeCodeUsage {
             guard let entry = utilization[window.key] as? [String: Any],
                   let number = entry["utilization"] as? NSNumber, CFGetTypeID(number) != CFBooleanGetTypeID(),
                   number.doubleValue.isFinite else { continue }
-            result.append(AgentLimitWindow(id: "claude.\(window.key)", kind: window.kind, minutes: window.minutes,
+            result.append(AgentLimitWindow(id: "claude.\(window.id)", kind: window.kind, minutes: window.minutes,
                                            scope: window.scope, usedPercent: min(100, max(0, number.doubleValue)),
                                            resetsAt: (entry["resets_at"] as? String).flatMap(AgentTimestamp.parse)))
         }

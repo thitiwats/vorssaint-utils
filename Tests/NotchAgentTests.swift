@@ -2449,6 +2449,16 @@ enum NotchAgentTests {
                         && AgentClaudeCodeUsage.combined(app, nil) == app
                         && AgentClaudeCodeUsage.combined(nil, nil) == nil,
                      "the newer reading leads and keeps a window only the older one knows")
+        let appSession = AgentLimits(provider: .claude, windows: [AgentLimitWindow(
+            id: "claude.fh", kind: .session, minutes: 300, scope: nil, usedPercent: 79, resetsAt: nil)],
+                                     observedAt: fetched.addingTimeInterval(-600), source: .claudeApp)
+        let codeSession = AgentLimits(provider: .claude, windows: [AgentLimitWindow(
+            id: reading?.windows.first?.id ?? "", kind: .session, minutes: 300, scope: nil, usedPercent: 81, resetsAt: nil)],
+                                      observedAt: fetched, source: .claudeCode)
+        suite.expect(reading?.windows.map(\.id) == ["claude.fh", "claude.sd"]
+                        && AgentLimitSupport.crossings(previous: appSession, current: codeSession, threshold: 80)
+                        .map(\.id) == ["claude.fh"],
+                     "a window keeps the Claude app's id, so an alert still fires when the newer reading switches source")
         let home = FileManager.default.temporaryDirectory.appending(path: "vorss-claude-code-\(UUID().uuidString)")
         defer { try? FileManager.default.removeItem(at: home) }
         try? FileManager.default.createDirectory(at: home, withIntermediateDirectories: true)
