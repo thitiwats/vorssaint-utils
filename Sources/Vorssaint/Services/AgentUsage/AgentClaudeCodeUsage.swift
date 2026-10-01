@@ -61,7 +61,11 @@ enum AgentClaudeCodeUsage {
     }
 
     /// The newer of two readings, with any window only the older one knows,
-    /// such as a model's own week, kept from it.
+    /// such as a model's own week, kept from it. A window both cover keeps
+    /// Claude Code's renewal time: the app's falls on the hour of its history
+    /// while the cache holds the account's own, so following whichever saved
+    /// last would make the countdown jump and `crossings` see a renewed
+    /// window every few minutes.
     static func combined(_ first: AgentLimits?, _ second: AgentLimits?) -> AgentLimits? {
         guard let first, let second else { return first ?? second }
         let firstIsNewer = first.observedAt >= second.observedAt
@@ -69,6 +73,15 @@ enum AgentClaudeCodeUsage {
         let older = firstIsNewer ? second : first
         let key = { (window: AgentLimitWindow) in "\(window.kind.rawValue):\(window.scope ?? "")" }
         let known = Set(newer.windows.map(key))
+        if older.source == .claudeCode {
+            let renewals = Dictionary(older.windows.compactMap { window in window.resetsAt.map { (key(window), $0) } },
+                                      uniquingKeysWith: { first, _ in first })
+            newer.windows = newer.windows.map { window in
+                guard let renewal = renewals[key(window)] else { return window }
+                return AgentLimitWindow(id: window.id, kind: window.kind, minutes: window.minutes, scope: window.scope,
+                                        usedPercent: window.usedPercent, resetsAt: renewal)
+            }
+        }
         newer.windows += older.windows.filter { !known.contains(key($0)) }
         return newer
     }

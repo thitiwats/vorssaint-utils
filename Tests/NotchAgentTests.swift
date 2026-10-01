@@ -2345,6 +2345,18 @@ enum NotchAgentTests {
                         && AgentClaudeCodeUsage.combined(app, nil) == app
                         && AgentClaudeCodeUsage.combined(nil, nil) == nil,
                      "the newer reading leads and keeps a window only the older one knows")
+        let onTheHour = { (offset: TimeInterval) in AgentLimits(provider: .claude, windows: [AgentLimitWindow(
+            id: "claude.fh", kind: .session, minutes: 300, scope: nil, usedPercent: 85,
+            resetsAt: at("2026-09-28T16:00:00Z"))], observedAt: fetched.addingTimeInterval(offset), source: .claudeApp) }
+        let codeLeads = AgentClaudeCodeUsage.combined(onTheHour(-120), reading)
+        let appLeads = AgentClaudeCodeUsage.combined(onTheHour(120), reading)
+        let renewals = { (limits: AgentLimits?) in limits?.windows.first { $0.kind == .session }?.resetsAt }
+        suite.expect(renewals(codeLeads) == at("2026-09-28T16:09:59.148385+00:00")
+                        && renewals(appLeads) == renewals(codeLeads)
+                        && appLeads?.windows.first?.usedPercent == 85
+                        && appLeads.flatMap { AgentLimitSupport.crossings(previous: codeLeads, current: $0, threshold: 20) } == []
+                        && codeLeads.flatMap { AgentLimitSupport.crossings(previous: appLeads, current: $0, threshold: 20) } == [],
+                     "a window both readings cover keeps Claude Code's renewal time, so alternating saves neither move the countdown nor warn again")
         let appSession = AgentLimits(provider: .claude, windows: [AgentLimitWindow(
             id: "claude.fh", kind: .session, minutes: 300, scope: nil, usedPercent: 79, resetsAt: nil)],
                                      observedAt: fetched.addingTimeInterval(-600), source: .claudeApp)
