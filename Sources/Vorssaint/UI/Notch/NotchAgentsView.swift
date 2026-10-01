@@ -130,7 +130,8 @@ private struct NotchAgentLimitsCard: View {
     /// A reading the Claude app or Claude Code saved a while ago: still the
     /// latest known, shown quieter until one checks again.
     private var stale: Bool {
-        guard let limits = snapshot.limits[provider], limits.source != .sessionLog else { return false }
+        guard let limits = snapshot.limits[provider],
+              limits.source == .claudeApp || limits.source == .claudeCode else { return false }
         return now.timeIntervalSince(limits.observedAt) >= AgentClaudeAppUsage.freshness
     }
 
