@@ -168,10 +168,16 @@ struct NotchAgentsSettingsControls: View {
         let checked = usage.claudeAppChecked ?? claudeAppFileCheck
         let codeChecked = usage.claudeCodeChecked ?? claudeCodeFileCheck
         HStack(alignment: .top, spacing: 10) {
-            // Claude Code's limits stand in while they are newer and current.
+            // Claude Code's limits stand in while they are newer and current,
+            // and without the Claude app they stay named with their age, since
+            // the island keeps showing them until their windows renew.
             if let codeChecked, codeChecked > checked ?? .distantPast,
-               now.timeIntervalSince(codeChecked) < AgentClaudeAppUsage.freshness {
-                Image(systemName: "checkmark.circle.fill").foregroundStyle(.green)
+               now.timeIntervalSince(codeChecked) < AgentClaudeAppUsage.freshness || claudeApp == nil {
+                if now.timeIntervalSince(codeChecked) < AgentClaudeAppUsage.freshness {
+                    Image(systemName: "checkmark.circle.fill").foregroundStyle(.green)
+                } else {
+                    Image(systemName: "info.circle.fill").foregroundStyle(.secondary)
+                }
                 Text(text.claudeLimitsCode(relative(codeChecked, now: now)))
                 Spacer(minLength: 0)
             } else if let checked, now.timeIntervalSince(checked) < AgentClaudeAppUsage.freshness {
